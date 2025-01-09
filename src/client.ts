@@ -10,13 +10,13 @@ const options: SocketConnectOpts = {
 const client = new Modbus.client.TCP(socket);
 
 const readStart = 0;
-const readCount = 10;
+const readCount = 8;
 
 socket.on('connect', function () {
 
   // const values = Buffer.from([0xff])
 
-  // client.writeMultipleCoils(1, values, 1)
+  // client.writeMultipleCoils(0, values, 8)
   //   .then(({ metrics, request, response }) => {
   //     console.log('Transfer Time: ' + metrics.transferTime)
   //     console.log('Response Function Code: ' + response.body.fc)
@@ -33,6 +33,14 @@ socket.on('connect', function () {
     })
     .catch(handleErrors)
     .finally(() => socket.end());
+
+  // client.writeMultipleRegisters(1, [0x000a, 0x0102])
+  //   .then(({ metrics, request, response }) => {
+  //     console.log('Transfer Time: ' + metrics.transferTime)
+  //     console.log('Response Function Code: ' + response.body.fc)
+  //   })
+  //   .catch(handleErrors)
+  //   .finally(() => socket.end())
 
   client.readHoldingRegisters(readStart, readCount)
     .then(({ metrics, request, response }) => {

@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/app.js",
-    "test": "concurrently \"tsc --watch\" \"nodemon -q dist/app.js\""
+    "client": "concurrently \"tsc --watch\" \"nodemon -q dist/client.js\"",
+    "server": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
