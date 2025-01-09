@@ -1,4 +1,4 @@
-import Modbus from 'jsmodbus';
+import * as Modbus from 'jsmodbus';
 import { Socket, SocketConnectOpts } from 'net';
 
 const socket = new Socket()
@@ -7,21 +7,42 @@ const options: SocketConnectOpts = {
   host: '127.0.0.1',    
   port: 502
 }
-const client = new Modbus.client.TCP(socket)
+const client = new Modbus.client.TCP(socket);
 
 const readStart = 0;
-const readCount = 5;
+const readCount = 10;
 
 socket.on('connect', function () {
 
+  // const values = Buffer.from([0xff])
+
+  // client.writeMultipleCoils(1, values, 1)
+  //   .then(({ metrics, request, response }) => {
+  //     console.log('Transfer Time: ' + metrics.transferTime)
+  //     console.log('Response Function Code: ' + response.body.fc)
+  //   })
+  //   .catch(handleErrors)
+  //   .finally(() => socket.end());
+
   client.readCoils(readStart, readCount)
     .then(({ metrics, request, response }) => {
+      console.log('Read Coil:');
+      console.log('Transfer Time: ' + metrics.transferTime);
+      console.log('Response Body Payload: ' + response.body.valuesAsArray);
+      console.log('Response Body Payload As Buffer: ' + response.body.valuesAsBuffer);
+    })
+    .catch(handleErrors)
+    .finally(() => socket.end());
+
+  client.readHoldingRegisters(readStart, readCount)
+    .then(({ metrics, request, response }) => {
+      console.log('Read Holding Register:');
       console.log('Transfer Time: ' + metrics.transferTime)
       console.log('Response Body Payload: ' + response.body.valuesAsArray)
       console.log('Response Body Payload As Buffer: ' + response.body.valuesAsBuffer)
     })
     .catch(handleErrors)
-    .finally(() => socket.end())
+    .finally(() => socket.end());
 
 });
 
