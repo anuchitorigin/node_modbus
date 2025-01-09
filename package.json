@@ -2,9 +2,11 @@
   "name": "node_modbus",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "start": "node app.js",
+    "test": "concurrently \"tsc --watch\" \"nodemon -q dist/app.js\""
   },
   "keywords": [],
   "author": "",
@@ -13,6 +15,9 @@
     "jsmodbus": "^4.0.10"
   },
   "devDependencies": {
+    "@types/node": "^22.10.5",
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.9",
     "typescript": "^5.7.3"
   }
 }
