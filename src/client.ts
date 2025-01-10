@@ -14,9 +14,9 @@ const readCount = 8;
 
 socket.on('connect', function () {
 
-  // const values = Buffer.from([0xff])
+  // const values = Buffer.from([0x01])
 
-  // client.writeMultipleCoils(0, values, 8)
+  // client.writeMultipleCoils(1, values, 1)
   //   .then(({ metrics, request, response }) => {
   //     console.log('Transfer Time: ' + metrics.transferTime)
   //     console.log('Response Function Code: ' + response.body.fc)
@@ -27,9 +27,9 @@ socket.on('connect', function () {
   client.readCoils(readStart, readCount)
     .then(({ metrics, request, response }) => {
       console.log('Read Coil:');
-      console.log('Transfer Time: ' + metrics.transferTime);
-      console.log('Response Body Payload: ' + response.body.valuesAsArray);
-      console.log('Response Body Payload As Buffer: ' + response.body.valuesAsBuffer);
+      console.log('  Transfer Time: ' + metrics.transferTime);
+      console.log('  Response Body Payload: ' + response.body.valuesAsArray);
+      console.log('  Response Body Payload As Buffer: ' + response.body.valuesAsBuffer);
     })
     .catch(handleErrors)
     .finally(() => socket.end());
@@ -45,9 +45,9 @@ socket.on('connect', function () {
   client.readHoldingRegisters(readStart, readCount)
     .then(({ metrics, request, response }) => {
       console.log('Read Holding Register:');
-      console.log('Transfer Time: ' + metrics.transferTime)
-      console.log('Response Body Payload: ' + response.body.valuesAsArray)
-      console.log('Response Body Payload As Buffer: ' + response.body.valuesAsBuffer)
+      console.log('  Transfer Time: ' + metrics.transferTime)
+      console.log('  Response Body Payload: ' + response.body.valuesAsArray)
+      console.log('  Response Body Payload As Buffer: ' + response.body.valuesAsBuffer)
     })
     .catch(handleErrors)
     .finally(() => socket.end());
