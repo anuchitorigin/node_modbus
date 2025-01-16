@@ -4,13 +4,14 @@ import { Socket, SocketConnectOpts } from 'net';
 const socket = new Socket()
 
 const options: SocketConnectOpts = {
-  host: '127.0.0.1',    
+  host: '192.168.1.250',    
   port: 502
 }
 const client = new Modbus.client.TCP(socket);
 
 const readStart = 0;
-const readCount = 8;
+const readCoilCount = 8;
+const readHoldingRegisterCount = 2;
 
 socket.on('connect', function () {
 
@@ -24,7 +25,7 @@ socket.on('connect', function () {
   //   .catch(handleErrors)
   //   .finally(() => socket.end());
 
-  client.readCoils(readStart, readCount)
+  client.readCoils(readStart, readCoilCount)
     .then(({ metrics, request, response }) => {
       console.log('Read Coil:');
       console.log('  Transfer Time: ' + metrics.transferTime);
@@ -42,7 +43,7 @@ socket.on('connect', function () {
   //   .catch(handleErrors)
   //   .finally(() => socket.end())
 
-  client.readHoldingRegisters(readStart, readCount)
+  client.readHoldingRegisters(readStart, readHoldingRegisterCount)
     .then(({ metrics, request, response }) => {
       console.log('Read Holding Register:');
       console.log('  Transfer Time: ' + metrics.transferTime)
