@@ -7,7 +7,7 @@ const MAX_RECON_CNT = 10;
 const coil_read_addr = 0;
 const coil_read_cnt = 8;
 const hregister_read_addr = 0;
-const hregister_read_cnt = 2;
+const hregister_read_cnt = 8;
 
 const CMD_INTERVAL = 50;
 const RECON_INTERVAL = 10000;
