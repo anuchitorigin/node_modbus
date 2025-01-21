@@ -1,63 +1,49 @@
 import * as Modbus from 'jsmodbus';
 import { Socket, SocketConnectOpts } from 'net';
 
-const socket = new Socket()
+const MAX_ERROR_CNT = 3;
+const MAX_RECON_CNT = 10;
+
+const coil_read_addr = 0;
+const coil_read_cnt = 8;
+const hregister_read_addr = 0;
+const hregister_read_cnt = 2;
+
+const CMD_INTERVAL = 50;
+const RECON_INTERVAL = 10000;
+
+let success_cnt = 0
+let error_cnt = 0
+let reconnect_cnt = 0
+
+let connected = false;
 
 const options: SocketConnectOpts = {
-  host: '192.168.1.250',    
+  host: '192.168.3.250',    
   port: 502
 }
+
+const socket = new Socket()
 const client = new Modbus.client.TCP(socket);
 
-const readStart = 0;
-const readCoilCount = 8;
-const readHoldingRegisterCount = 2;
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-socket.on('connect', function () {
+// function connectModbus() {
+//   return new Promise<void>((resolve, rejects) => {
+//     client.socket.connect(options, () => {
+//       resolve();
+//     });
+//     client.socket.on("error", (error) => {
+//       rejects(error);
+//     });
+//   });
+// }
 
-  // const values = Buffer.from([0x01])
-
-  // client.writeMultipleCoils(1, values, 1)
-  //   .then(({ metrics, request, response }) => {
-  //     console.log('Transfer Time: ' + metrics.transferTime)
-  //     console.log('Response Function Code: ' + response.body.fc)
-  //   })
-  //   .catch(handleErrors)
-  //   .finally(() => socket.end());
-
-  client.readCoils(readStart, readCoilCount)
-    .then(({ metrics, request, response }) => {
-      console.log('Read Coil:');
-      console.log('  Transfer Time: ' + metrics.transferTime);
-      console.log('  Response Body Payload: ' + response.body.valuesAsArray);
-      console.log('  Response Body Payload As Buffer: ' + response.body.valuesAsBuffer);
-    })
-    .catch(handleErrors)
-    .finally(() => socket.end());
-
-  // client.writeMultipleRegisters(1, [0x000a, 0x0102])
-  //   .then(({ metrics, request, response }) => {
-  //     console.log('Transfer Time: ' + metrics.transferTime)
-  //     console.log('Response Function Code: ' + response.body.fc)
-  //   })
-  //   .catch(handleErrors)
-  //   .finally(() => socket.end())
-
-  client.readHoldingRegisters(readStart, readHoldingRegisterCount)
-    .then(({ metrics, request, response }) => {
-      console.log('Read Holding Register:');
-      console.log('  Transfer Time: ' + metrics.transferTime)
-      console.log('  Response Body Payload: ' + response.body.valuesAsArray)
-      console.log('  Response Body Payload As Buffer: ' + response.body.valuesAsBuffer)
-    })
-    .catch(handleErrors)
-    .finally(() => socket.end());
-
-});
-
-socket.on('error', console.error);
-socket.connect(options);
-
+function disconnectModbus() {
+  socket.end();
+}
 
 function handleErrors(err: any) {
   if (Modbus.errors.isUserRequestError(err)) {
@@ -69,13 +55,87 @@ function handleErrors(err: any) {
       case 'ModbusException':
       case 'Offline':
       case 'crcMismatch':
-        console.log('Error Message: ' + err.message, 'Error' + 'Modbus Error Type: ' + err.err)
+        console.log('Error Message: '+err.message+', Modbus Error Type: ['+err.err+']')
         break;
     }
-
   } else if (Modbus.errors.isInternalException(err)) {
-    console.log('Error Message: ' + err.message, 'Error' + 'Error Name: ' + err.name, err.stack);
+    console.log('Error Message: '+err.message+', Error Name: '+err.name+'. ', err.stack);
   } else {
     console.log('Unknown Error', err);
   }
 }
+
+async function Read_Coils(startaddr: number, length: number) {
+  // console.log('Reading Coils...')
+  const result = await client.readCoils(startaddr, length);
+  console.log('Coils: '+result.response.body.valuesAsArray);
+  await sleep(CMD_INTERVAL);
+}
+
+async function Read_HoldingRegisters(startaddr: number, length: number) {
+  // console.log('Reading HoldingRegisters...')
+  const result = await client.readHoldingRegisters(startaddr, length);
+  console.log('H.Register: '+result.response.body.valuesAsArray);
+  await sleep(CMD_INTERVAL);
+}
+
+async function do_communication() {
+  let close_connection = false;
+  while (!close_connection) {
+    try {
+      // MODBUS function here
+      await Read_Coils(coil_read_addr, coil_read_cnt);
+      await Read_HoldingRegisters(hregister_read_addr, hregister_read_cnt);
+      console.log('----------');
+    } catch (error) {
+      handleErrors(error);
+      error_cnt += 1;
+      close_connection = true;
+    }
+  }
+}
+
+process.on('SIGTERM', disconnectModbus);
+process.on('SIGINT', disconnectModbus);
+
+socket.on('connect', function () {
+  console.log('[OK] Socket connected.');
+  connected = true;
+  success_cnt += 1;
+  reconnect_cnt = 0;
+  do_communication();
+});
+
+socket.on('close', async function () {
+  console.log('[--] Socket closed.');
+  connected = false;
+  console.log('success_cnt= '+success_cnt);
+  console.log('error_cnt= '+error_cnt);
+  console.log('reconnect_cnt= '+reconnect_cnt);
+  // non-stop loop
+  // console.log('Reconnecting...');
+  // await sleep(RECON_INTERVAL);
+  // socket.connect(options);
+  // dev loop
+  if (reconnect_cnt < MAX_RECON_CNT) {
+    // error_cnt = 0;
+    reconnect_cnt += 1;
+    console.log('Reconnecting...');
+    await sleep(RECON_INTERVAL);
+    socket.connect(options);
+  } else {
+    console.log('Max reconnect count reached, program terminated.');
+    disconnectModbus();
+  }
+});
+
+socket.on('error', function (err) {
+  console.log('Socket Error > ', err)
+  disconnectModbus();
+});
+
+//### Main Program ###
+
+socket.connect(options);
+
+//### End Program ###
