@@ -8,7 +8,7 @@ const server = new Modbus.server.TCP(netServer, {
 })
 
 server.on('connection', function (client) {
-  console.log('New Connection')
+  console.log('['+(new Date())+'] New Connection');
 })
 
 // server.on('readCoils', function (request, response, send) {
