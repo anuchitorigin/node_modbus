@@ -9,16 +9,9 @@ import { K_SYSID, K_log_incident, K_DB } from './localconst';
 import { xString, xNumber, xBoolean, toArray, isData, sleep, incident} from './originutil';
 import { add_log_sys } from './logutil';
 import { get_sysvar_varvalue } from './sysutil';
+import { get_shifts_active } from './datafunc';
 import { 
-  add_iovalue,
-  get_iocommand_hosts_by_protocol,
-  get_iocommands_by_host,
-  get_iotempcmd_hosts_by_protocol,
-  get_iotempcmds_by_host,
-  update_iovalue,
-  delete_iotempcmd,
-} from './dbfunc';
-import { 
+  K_COMM_MODE,
   K_MODBUS,
   read_coils,
   read_inputs,
@@ -29,6 +22,17 @@ import {
   write_coils,
   write_registers,
 } from './modbusfunc';
+import { 
+  add_iovalue,
+  add_iotempcmds,
+  get_iocommands_by_protocol,
+  get_iocommand_hosts_by_protocol,
+  get_iocommands_by_host,
+  get_iotempcmd_hosts_by_protocol,
+  get_iotempcmds_by_host,
+  update_iovalue,
+  delete_iotempcmd,
+} from './dbfunc';
 
 //################################# DECLARATION #################################
 const THIS_FILENAME = 'worker.ts';
@@ -40,7 +44,13 @@ let comm_delay = COMM_DELAY_DEF;
 let last_error = '';
 let last_error_time = new Date();
 
-let internal_loopno = 0; // test
+let mainloopno = 0;
+let shiftloopno = 0;
+
+let last_hour = new Date().getHours();
+let last_minute = new Date().getMinutes();
+let pass_last_time = true;
+
 let errorcnt = 0; // test
 
 //################################# FUNCTION #################################
@@ -156,7 +166,7 @@ async function modbus_communication(socket: Socket, client: Modbus.ModbusTCPClie
   if (!Array.isArray(commands)) {
     return false;
   }
-  // console.log(internal_loopno+' Commands: ', commands);
+  // console.log(mainloopno+' Commands: ', commands);
   let noerror = true;
   for (let command of commands) {
     if (!(command.commandid && command.commandtype && command.hostip && command.hostport && isData(command.ioaddress) && command.iolength)) {
@@ -177,7 +187,7 @@ async function modbus_communication(socket: Socket, client: Modbus.ModbusTCPClie
     let dataresult = null;
     let nodberror = true;
     try {
-      console.log(internal_loopno+' Command Type: ', command.commandtype);
+      // console.log(mainloopno+' Command Type: ', command.commandtype);
       switch (command.commandtype) {
         case K_MODBUS.fc_read_coils:
           dataresult = await read_coils(client, ioaddress, iolength);
@@ -255,8 +265,8 @@ async function modbus_communication(socket: Socket, client: Modbus.ModbusTCPClie
           break;
       }
     } catch (err) {
-      console.log(err);
-      console.log(incident(THIS_FILENAME+':modbus_communication', String(err)));
+      // console.log(err);
+      // console.log(incident(THIS_FILENAME+':modbus_communication', String(err)));
       noerror = false;
       await modbus_error(err);
     }
@@ -269,11 +279,11 @@ async function modbus_communication(socket: Socket, client: Modbus.ModbusTCPClie
 
 async function do_modbus_primary() {
   // -- Get Hosts
-  const hosts = await get_iocommand_hosts_by_protocol(K_MODBUS.protocol);
+  const hosts = await get_iocommand_hosts_by_protocol(K_COMM_MODE.readcycle, K_MODBUS.protocol);
   if (hosts == K.SYS_INTERNAL_PROCESS_ERROR) {
     return false;
   }
-  console.log(internal_loopno+' Hosts: ', hosts);
+  // console.log(mainloopno+' Hosts: ', hosts);
   if (hosts.length == 0) {
     return false;
   }
@@ -307,17 +317,17 @@ async function do_modbus_primary() {
     const client = new Modbus.client.TCP(socket);
 
     socket.on('close', () => {
-      console.log(internal_loopno+' [-] Socket closed. !='+errorcnt);
+      // console.log(mainloopno+' [-] Socket closed. !='+errorcnt);
     });
     
     socket.on('error', (err) => {
-      console.log(internal_loopno+' [!] Socket error > ', err)
+      // console.log(mainloopno+' [!] Socket error > ', err)
       modbus_disconnect(socket);
       errorcnt++;
     });
 
     socket.on('connect', async () => {
-      console.log(internal_loopno+' [/] Socket connected.');
+      // console.log(mainloopno+' [/] Socket connected.');
       await modbus_communication(socket, client, commands);
       await delete_tempcmds(commands);
     });
@@ -339,7 +349,7 @@ async function do_modbus_secondary() {
 }
 
 async function handle_modbus(loopno: number) {
-  internal_loopno = loopno;
+  mainloopno = loopno;
   // -- Get System Variables
   let COMM_DELAY = await get_sysvar_varvalue('COMM_DELAY');
   if (COMM_DELAY == K.SYS_INTERNAL_PROCESS_ERROR) {
@@ -350,8 +360,10 @@ async function handle_modbus(loopno: number) {
     comm_delay = COMM_DELAY;
   }
   // -- Signal
-  // process.on('SIGTERM', modbus_disconnect); -- let socket close itself
-  // process.on('SIGINT', modbus_disconnect); -- let socket close itself
+  // if (mainloopno == 1) {
+  //   process.on('SIGTERM', modbus_disconnect); -- let socket close itself
+  //   process.on('SIGINT', modbus_disconnect); -- let socket close itself
+  // }
   // -- Do Modbus Primary
   const primary = await do_modbus_primary();
   // -- Do Modbus Secondary
@@ -359,6 +371,62 @@ async function handle_modbus(loopno: number) {
   return (primary && secondary);
 }
 
+async function handle_modbus_next_shift(loopno: number) {
+  shiftloopno = loopno;
+  // comm_delay = COMM_DELAY_DEF; -- Use value from the Main Loop
+  // -- Check for Shift Change
+  const shifts = await get_shifts_active();
+  if (shifts == K.SYS_INTERNAL_PROCESS_ERROR) {
+    return false;
+  }
+  if (shifts.length > 0) {
+    for (let shift of shifts) {
+      const resettime = xString(shift.resettime);
+      const timesplit = resettime.split(':');
+      if (timesplit.length >= 2) {
+        const reset_hour = xNumber(timesplit[0]);
+        const reset_minute = xNumber(timesplit[1]);
+        const now_hour = new Date().getHours();
+        const now_minute = new Date().getMinutes();
+        if (!pass_last_time) {
+          if ((last_hour != now_hour) || (last_minute != now_minute)) {
+            pass_last_time = true;
+          }
+        }
+        if ((reset_hour == now_hour) && (reset_minute == now_minute) && pass_last_time) {
+          // -- Load I/O Commands
+          const commands = await get_iocommands_by_protocol(K_COMM_MODE.writeshiftreset, K_MODBUS.protocol);
+          if (commands == K.SYS_INTERNAL_PROCESS_ERROR) {
+            return false;
+          }
+          // -- Save to Temporary Commands
+          if (commands.length > 0) {
+            for (let command of commands) {
+              const commandtype = xString(command.commandtype);
+              const device_id = xNumber(command.device_id);
+              const ioaddress = xNumber(command.ioaddress);
+              const iolength = xNumber(command.iolength);
+              const datavalue = xString(command.datavalue);
+              const nextdelay = xNumber(command.nextdelay);
+              const id = await add_iotempcmds(commandtype, device_id, ioaddress, iolength, datavalue, nextdelay);
+              if ((id == K.SYS_INTERNAL_PROCESS_ERROR) || (!id)) {
+                return false;
+              }
+            }
+          }
+          // -- Save Last Time
+          last_hour = reset_hour;
+          last_minute = reset_minute;
+          pass_last_time = false;
+          return true;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 export {
   handle_modbus,
+  handle_modbus_next_shift,
 }
