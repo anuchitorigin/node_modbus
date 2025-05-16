@@ -2,8 +2,10 @@ import * as Modbus from 'jsmodbus'
 import { Server } from 'net'
 
 const netServer = new Server()
-const initialHoldingRegisters = Buffer.alloc(100)
+const initialCoils = Buffer.alloc(10000)
+const initialHoldingRegisters = Buffer.alloc(200)
 const server = new Modbus.server.TCP(netServer, {
+  coils: initialCoils,
   holding: initialHoldingRegisters
 })
 

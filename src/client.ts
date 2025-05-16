@@ -2,14 +2,14 @@ import * as Modbus from 'jsmodbus';
 import { Socket, SocketConnectOpts } from 'net';
 
 const MAX_ERROR_CNT = 3;
-const MAX_RECON_CNT = 10;
+const MAX_RECON_CNT = 3;
 
 const coil_read_addr = 0;
 const coil_read_cnt = 8;
 const hregister_read_addr = 0;
-const hregister_read_cnt = 8;
+const hregister_read_cnt = 23;
 
-const CMD_INTERVAL = 50;
+const CMD_INTERVAL = 2500;
 const RECON_INTERVAL = 10000;
 
 let success_cnt = 0
@@ -18,8 +18,10 @@ let reconnect_cnt = 0
 
 let connected = false;
 
+let force_close = false;
+
 const options: SocketConnectOpts = {
-  host: '192.168.3.250',    
+  host: '192.168.3.20', // '192.168.3.250', 
   port: 502
 }
 
@@ -42,6 +44,7 @@ function sleep(ms: number) {
 // }
 
 function disconnectModbus() {
+  force_close = true;
   socket.end();
 }
 
@@ -84,7 +87,7 @@ async function do_communication() {
   while (!close_connection) {
     try {
       // MODBUS function here
-      await Read_Coils(coil_read_addr, coil_read_cnt);
+      // await Read_Coils(coil_read_addr, coil_read_cnt);
       await Read_HoldingRegisters(hregister_read_addr, hregister_read_cnt);
       console.log('----------');
     } catch (error) {
@@ -102,7 +105,6 @@ socket.on('connect', function () {
   console.log('[OK] Socket connected.');
   connected = true;
   success_cnt += 1;
-  reconnect_cnt = 0;
   do_communication();
 });
 
@@ -112,12 +114,10 @@ socket.on('close', async function () {
   console.log('success_cnt= '+success_cnt);
   console.log('error_cnt= '+error_cnt);
   console.log('reconnect_cnt= '+reconnect_cnt);
-  // non-stop loop
-  // console.log('Reconnecting...');
-  // await sleep(RECON_INTERVAL);
-  // socket.connect(options);
-  // dev loop
-  if (reconnect_cnt < MAX_RECON_CNT) {
+  // *** non-stop loop ***
+  // reconnect_cnt = 0;
+  // *** dev loop ***
+  if (!force_close && (reconnect_cnt < MAX_RECON_CNT)) {
     // error_cnt = 0;
     reconnect_cnt += 1;
     console.log('Reconnecting...');
