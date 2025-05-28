@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "client": "concurrently \"tsc --watch\" \"nodemon -q dist/client.js\"",
-    "server": "node dist/server.js"
+    "server": "concurrently \"tsc --watch\" \"nodemon -q dist/server.js\""
   },
   "keywords": [],
   "author": "",
